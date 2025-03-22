@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Disk Drop Game</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .board {
+      position: relative;
+      width: 100%;
+      max-width: 400px;
+      height: 500px;
+      background-color: #f0f0f0;
+      margin: 0 auto;
+      border: 2px solid #000;
+      overflow: hidden;
+    }
+    .pin {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background-color: #333;
+      border-radius: 50%;
+    }
+    .disk {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      background-color: red;
+      border-radius: 50%;
+      top: 0;
+      left: 185px; /* Ensure initial position is at the top */
+      cursor: pointer;
+      transition: left 0.1s linear, top 0.1s linear;
+    }
+    .score-zone {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      height: 50px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: #ddd;
+      border-top: 2px solid #000;
+    }
+    .score {
+      font-size: 20px;
+      font-weight: bold;
+      padding: 0 10px;
+      border-right: 2px solid #000;
+      flex: 1;
+      text-align: center;
+    }
+    .score:last-child {
+      border-right: none;
+    }
+    .controls {
+      margin-top: 20px;
+      text-align: center;
+    }
+    input[type="number"] {
+      width: 100px;
+      padding: 5px;
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container text-center mt-5">
+    <h1>Disk Drop Game</h1>
+    <div class="board" id="board">
+      <!-- Pins will be dynamically added here -->
+      <div class="disk" id="disk"></div>
+      <div class="score-zone">
+        <div class="score" data-score="10">10</div>
+        <div class="score" data-score="20">20</div>
+        <div class="score" data-score="30">30</div>
+        <div class="score" data-score="40">40</div>
+        <div class="score" data-score="50">50</div>
+      </div>
+    </div>
+    <div class="controls">
+      <label for="diskPosition">Select Disk Position (0-370):</label>
+      <input type="number" id="diskPosition" min="0" max="370" value="185">
+      <button id="start" class="btn btn-primary">Drop Disk</button>
+      <button id="restart" class="btn btn-secondary">Restart Game</button>
+    </div>
+    <p class="mt-3">Your Score: <span id="scoreDisplay">0</span></p>
+    <p class="mt-3">Attempts Left: <span id="attemptsLeft">3</span></p>
+  </div>
+
+  <script>
+    const board = document.getElementById('board');
+    const disk = document.getElementById('disk');
+    const startButton = document.getElementById('start');
+    const restartButton = document.getElementById('restart');
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const attemptsLeftDisplay = document.getElementById('attemptsLeft');
+    const diskPositionInput = document.getElementById('diskPosition');
+    let score = 0;
+    let attemptsLeft = 3; // Number of attempts
+    let pins = [];
+
+    // Function to create pins in a staggered alignment with increased gaps
+    function createPins() {
+      const pinRows = 8; // Number of rows of pins
+      const pinSpacingX = 60; // Increased horizontal spacing between pins
+      const pinSpacingY = 60; // Increased vertical spacing between pins
+      const offsetX = 30; // Horizontal offset from the left
+      const offsetY = 30; // Vertical offset from the top
+      const scoreZoneHeight = 50; // Height of the score zone at the bottom
+
+      for (let row = 0; row < pinRows; row++) {
+        const isEvenRow = row % 2 === 0; // Check if the row is even or odd
+        const pinsInRow = isEvenRow ? 6 : 5; // Even rows have 6 pins, odd rows have 5 pins
+
+        for (let col = 0; col < pinsInRow; col++) {
+          const pin = document.createElement('div');
+          pin.className = 'pin';
+          // Calculate horizontal position with staggered alignment
+          pin.style.left = `${offsetX + col * pinSpacingX + (isEvenRow ? 0 : pinSpacingX / 2)}px`;
+          pin.style.top = `${offsetY + row * pinSpacingY}px`;
+          // Ensure pins do not overlap the score zone
+          if (parseInt(pin.style.top) < board.offsetHeight - scoreZoneHeight) {
+            board.appendChild(pin);
+            pins.push(pin);
+          }
+        }
+      }
+    }
+
+    // Function to check collision between disk and pins
+    function checkCollision(disk, pin) {
+      const diskRect = disk.getBoundingClientRect();
+      const pinRect = pin.getBoundingClientRect();
+      return (
+        diskRect.left < pinRect.right &&
+        diskRect.right > pinRect.left &&
+        diskRect.top < pinRect.bottom &&
+        diskRect.bottom > pinRect.top
+      );
+    }
+
+    function resetDiskPosition() {
+        clearInterval(diskMovement); // Stop previous animation if any
+        disk.style.transition = "none"; // Remove animation to instantly reset position
+        disk.style.top = "0px"; // Reset to the top
+        disk.style.left = `${diskPositionInput.value}px`; // Reset to the selected position
+        setTimeout(() => {
+          disk.style.transition = "left 0.1s linear, top 0.1s linear"; // Re-enable animation
+        }, 50); // Small delay ensures transition re-applies properly
+      }
+      
+      let diskMovement; // Store interval reference
+      
+      function dropDisk() {
+        if (attemptsLeft <= 0) {
+          alert("No attempts left! Restart the game to play again.");
+          return;
+        }
+      
+        resetDiskPosition(); // Ensure the disk is fully reset before starting
+      
+        let top = 0;
+        let left = parseInt(diskPositionInput.value); // Get user input position
+      
+        diskMovement = setInterval(() => {
+          top += 5; // Move downward
+          disk.style.top = `${top}px`;
+      
+          let collided = false;
+          pins.forEach(pin => {
+            if (checkCollision(disk, pin)) {
+              collided = true;
+              left += (Math.random() > 0.5 ? 20 : -20);
+              disk.style.left = `${left}px`;
+            }
+          });
+      
+          if (top >= 450) {
+            clearInterval(diskMovement); // Stop movement at the bottom
+            calculateScore(left);
+            attemptsLeft--;
+            attemptsLeftDisplay.textContent = attemptsLeft;
+      
+            if (attemptsLeft <= 0) {
+              alert("Game Over! Your final score is: " + score);
+              startButton.disabled = true;
+            }
+          }
+        }, 20);
+      }
+      
+
+    // Function to drop the disk
+    function dropDisk() {
+      if (attemptsLeft <= 0) {
+        alert("No attempts left! Restart the game to play again.");
+        return;
+      }
+
+      resetDiskPosition(); // Ensure disk starts from the top
+
+      let top = 0;
+      let left = parseInt(diskPositionInput.value);
+
+      const interval = setInterval(() => {
+        top += 5;
+        disk.style.top = `${top}px`;
+
+        // Check for collisions with pins
+        let collided = false;
+        pins.forEach(pin => {
+          if (checkCollision(disk, pin)) {
+            collided = true;
+            left += (Math.random() > 0.5 ? 20 : -20);
+            disk.style.left = `${left}px`;
+          }
+        });
+
+        // Stop when the disk reaches the bottom
+        if (top >= 450) {
+          clearInterval(interval);
+          calculateScore(left);
+          attemptsLeft--;
+          attemptsLeftDisplay.textContent = attemptsLeft;
+
+          if (attemptsLeft <= 0) {
+            alert("Game Over! Your final score is: " + score);
+            startButton.disabled = true;
+          }
+        }
+      }, 20);
+    }
+
+    // Function to calculate the score
+    function calculateScore(diskLeft) {
+      const scores = document.querySelectorAll('.score');
+      const boardRect = board.getBoundingClientRect();
+      const diskPosition = diskLeft + boardRect.left;
+
+      scores.forEach(scoreElement => {
+        const scoreRect = scoreElement.getBoundingClientRect();
+        if (diskPosition >= scoreRect.left && diskPosition <= scoreRect.right) {
+          score += parseInt(scoreElement.getAttribute('data-score'));
+          scoreDisplay.textContent = score;
+        }
+      });
+    }
+
+    startButton.addEventListener('click', dropDisk);
+    restartButton.addEventListener('click', () => {
+      score = 0;
+      attemptsLeft = 3;
+      attemptsLeftDisplay.textContent = '3';
+      scoreDisplay.textContent = '0';
+      startButton.disabled = false;
+      resetDiskPosition();
+    });
+
+    createPins();
+  </script>
+</body>
+</html>
